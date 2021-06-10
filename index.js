@@ -5,6 +5,8 @@ const express = require('express'),
   session = require('express-session');
 
 var app = express();
+var roomName = '';
+const nameBot = "BotChat";
 
 var server = app.listen(3030, function () {
   console.log("Servidor en marcha, port 3030.");
@@ -65,6 +67,8 @@ io.on('connection', function (socket) {
 	socket.on("login", function(data){
 	  const user = data.user,
 	  pass = data.pass;
+	  roomID = data.roomID;
+	  roomName = data.roomName;
 
 	  db.query("SELECT * FROM accounts WHERE Username=?", [user], function(err, rows, fields){
 		  if(rows.length == 0){//por lo que hacemos una sentencia sql seleccionando los usuarios que estan registrados
@@ -82,11 +86,15 @@ io.on('connection', function (socket) {
 				}
 				if(user == dataUser && pass == dataPass){
 					console.log("Usuario correcto!");
-					socket.emit("logged_in", {user: user, email: dataCorreo});
+					socket.emit("logged_in", {user: user, email: dataCorreo, room: roomName, roomID: roomID});
 					req.session.userID = rows[0].id;
 					req.session.Username = dataUser;
 					req.session.correo = dataCorreo;
+					req.session.roomID = roomID;
+					req.session.roomName = roomName;
 					req.session.save();
+					socket.join(req.session.roomName);
+					bottxt('entroSala');
 				}else{
 				  	socket.emit("invalido");
 				}
@@ -115,12 +123,25 @@ io.on('connection', function (socket) {
 			socket.emit('vacio');
 		}
 	});
+
+	socket.on('cambiodesala', function(data){
+		const idSala = data.idSala,
+		nombreSala = data.nombreSala;
+		
+		socket.leave(req.session.roomName);
+
+		req.session.roomID = idSala;
+		req.session.roomName = nombreSala;
+
+		socket.join(req.session.roomName);
+		bottxt('cambioSala');
+	});
 	
 	socket.on('mjsNuevo', function(data){ // Función para crear el mensaje nuevo.
 		
-		const sala = 1; // definimos el id de la sala para posterior función.
+		//const sala = 1; // definimos el id de la sala para posterior función.
 		
-			db.query("INSERT INTO mensajes(`mensaje`, `user_id`, `sala_id`, `fecha`) VALUES(?, ?, ?, CURDATE())", [data, req.session.userID, sala], function(err, result){
+			db.query("INSERT INTO mensajes(`mensaje`, `user_id`, `sala_id`, `fecha`) VALUES(?, ?, ?, CURDATE())", [data, req.session.userID, req.session.roomID], function(err, result){
 			  if(!!err)
 			  throw err;
 
@@ -128,7 +149,7 @@ io.on('connection', function (socket) {
 
 			  console.log('Mensaje dado de alta correctamente!.');//este mensaje solo se vera reflejado en la terminal
 			  
-			  		socket.broadcast.emit('mensaje', {
+			  		socket.broadcast.to(req.session.roomName).emit('mensaje', {
 						usuario: req.session.Username,
 						mensaje: data
 					});
@@ -140,8 +161,47 @@ io.on('connection', function (socket) {
 			});
 		
 	});
+
+	socket.on('getSalas', function(data){
+		db.query('SELECT id, nombre_sala from salas', function(err, result, fields){
+			if(err) throw err;
+			socket.emit('Salas', result);
+		});
+	});
+
+
 	
+	function bottxt(data){
+		entroSala = 'Bienvenido a la sala ' + req.session.roomName;
+		cambioSala = 'cambiaste de sala a ' + req.session.roomName;
+		sefue = 'el usuario ' + req.session.Username + ' ha salido.';
+
+		if(data =="entroSala"){
+			socket.emit('mensaje', {
+				usuario: nameBot,
+				mensaje: entroSala
+			});
+		}
+
+		if(data =="cambioSala"){
+			socket.emit('mensaje', {
+				usuario: nameBot,
+				mensaje: cambioSala
+			});
+		}
+
+		if(data =="salioUsuario"){
+			socket.emit('mensaje', {
+				usuario: nameBot,
+				mensaje: sefue
+			});
+		}
+	}
 	socket.on('salir', function(request, response){
+
+		bottxt('salioUsuario');
+
+		socket.leave(req.session.roomName);
 		req.session.destroy();//destruye la sesion iniciada
 	});
 });

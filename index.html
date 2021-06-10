@@ -147,6 +147,11 @@ a {
       <input type="password" class="form-control" id="Password" placeholder="Password" name="password">
       <label for="floatingPassword">Contraseña</label>
     </div>
+    <div>
+      <select class="form-control" name="roomsCambio" id="roomsCambio">
+        <option >cambiar de sala</option>
+      </select>
+    </div>
 
     <button class="w-100 btn btn-lg btn-primary" type="button" id="Login">Entrar</button>
     <button class="w-100 btn btn-lg btn-warning" type="button" id="registrar" data-toggle="modal" data-target="#registro">Registrar</button>
@@ -166,8 +171,19 @@ a {
 				<input name="usermsg" type="text" id="mensaje" size="63"/>
 				<input type="button" name="submitmsg" id="enviarMensaje" value="Enviar Mensaje"/>
 
+        <div>
+          <select class="form-control" name="roomsCambio" id="roomsCambio">
+            <option >cambiar de sala</option>
+          </select>
+        </div>
+        
+      
 			
 		</div>
+
+   <!-- <select class="form-control" name="roomsCambio" id="roomsCambio">
+      <option selected>cambiar de sala</option>
+    </select>-->
 	
 
 <!-- Modal -->
@@ -213,11 +229,38 @@ a {
 	  $(document).ready(function(){
 		  
 		  var socket = io();
+      let salas = [];
+      socket.emit('getSalas');
+
+      socket.on('Salas', function(data){
+        $.each(data, function(id, val){
+          salas.push(data[id].nombre_sala);
+        });
+        getSalas(salas);
+      });
+
+      $('#roomsCambio').change(function(){
+        roomID = $(this).val();
+        roomName = $(this).find('option:selected').text();
+
+        roomID = roomID + 1;
+
+        $('#SalaNombre').text(roomName);
+        $('#chatbox').empty();
+
+        socket.emit('cambiodesala', {
+          idSala: roomID,
+          nombreSala: roomName
+        });
+        console.log('cambio select a ID: ' + roomID + 'con nombre ' + roomName);
+      });
 		  
 		  $("#Login").click(function(){
 			  socket.emit("login", {
 				  user: $("#userName").val(),
-				  pass: $("#Password").val()
+				  pass: $("#Password").val(),
+          roomID: $('#rooms').val(),
+          roomName: $('#rooms').find('option:selected').text()
 			  });
 		  });
 
@@ -275,12 +318,34 @@ a {
 			});
 			
 			socket.on('mensaje', function(data){ // Función que tiene de respuesta el nuevo mensaje, concatenamos e insertamos en la caja de chat.
-					var nuevoMensaje = '<b>' + data.usuario + ' dice:</b> ' + data.mensaje;
-					$('#chatbox').append(nuevoMensaje + '</br>');
-					$('#mensaje').val("");
+          if(data.usuario == "BotChat"){
+            var nuevoMensaje = '<small class="bot"><b>' + data.usuario +'</b>' + data.mensaje + '</small>';
+
+            $('#chatbox').append(nuevoMensaje + '</br>');
+					  $('#mensaje').val("");
+          }//var nuevoMensaje = '<b>' + data.usuario + ' dice:</b> ' + data.mensaje;
+					else{
+            var nuevoMensaje = '<p class="mensajeEnviado"><b>' + data.usuario + 'dice: </b>' + data.mensaje + '</p>';
+            $('#chatbox').append(nuevoMensaje + '</br>');
+					  $('#mensaje').val("");
+          }
 				});
 
 	  });
+
+    function getSalas(data){
+      $.each(data, function(id, val){
+        $('#rooms').append($('<option>', {
+          value: id,
+          text: data[id]
+        }));
+
+        $('#roomsCambio').append($('<option>', {
+          value: id,
+          text: data[id]
+        }));
+      });
+    };
 </script>
     
   </body>
